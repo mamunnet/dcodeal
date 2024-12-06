@@ -1,7 +1,11 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from '@firebase/storage';
+import { getStorage } from 'firebase/storage';
+import type { FirebaseApp } from '@firebase/app-types';
+import type { Auth } from '@firebase/auth-types';
+import type { Firestore } from '@firebase/firestore-types';
+import type { FirebaseStorage } from '@firebase/storage-types';
 
 // Validate required environment variables
 const requiredEnvVars = [
@@ -11,13 +15,13 @@ const requiredEnvVars = [
   'VITE_FIREBASE_STORAGE_BUCKET',
   'VITE_FIREBASE_MESSAGING_SENDER_ID',
   'VITE_FIREBASE_APP_ID'
-];
+] as const;
 
-requiredEnvVars.forEach(varName => {
+for (const varName of requiredEnvVars) {
   if (!import.meta.env[varName]) {
     throw new Error(`Missing required environment variable: ${varName}`);
   }
-});
+}
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -28,14 +32,19 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// Initialize Firebase with error handling
+let app: FirebaseApp;
+let auth: Auth;
+let db: Firestore;
+let storage: FirebaseStorage;
+
 try {
-  const app = initializeApp(firebaseConfig);
-  export const auth = getAuth(app);
-  export const db = getFirestore(app);
-  export const storage = getStorage(app);
-  export default app;
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  storage = getStorage(app);
 } catch (error) {
   console.error('Error initializing Firebase:', error);
   throw new Error('Failed to initialize Firebase. Please check your configuration.');
-} 
+}
+
+export { app as default, auth, db, storage }; 

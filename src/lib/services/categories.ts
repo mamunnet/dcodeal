@@ -38,7 +38,11 @@ class CategoryService {
       
       return querySnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
         id: doc.id,
-        ...doc.data(),
+        name: doc.data().name,
+        description: doc.data().description,
+        image: doc.data().image,
+        status: doc.data().status,
+        parent_id: doc.data().parent_id,
         created_at: doc.data().created_at || Timestamp.now(),
         updated_at: doc.data().updated_at || Timestamp.now()
       })) as Category[];
@@ -57,14 +61,18 @@ class CategoryService {
       );
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs
-        .map((doc: QueryDocumentSnapshot<DocumentData>) => ({
-          id: doc.id,
-          ...doc.data(),
-          created_at: doc.data().created_at || Timestamp.now(),
-          updated_at: doc.data().updated_at || Timestamp.now()
-        }))
-        .filter((category: Category) => !category.parent_id) as Category[];
+      const categories = querySnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+        id: doc.id,
+        name: doc.data().name,
+        description: doc.data().description,
+        image: doc.data().image,
+        status: doc.data().status,
+        parent_id: doc.data().parent_id,
+        created_at: doc.data().created_at || Timestamp.now(),
+        updated_at: doc.data().updated_at || Timestamp.now()
+      })) as Category[];
+
+      return categories.filter(category => !category.parent_id);
     } catch (error) {
       console.error('Error getting active categories:', error);
       throw error;
@@ -83,7 +91,11 @@ class CategoryService {
       
       return querySnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
         id: doc.id,
-        ...doc.data(),
+        name: doc.data().name,
+        description: doc.data().description,
+        image: doc.data().image,
+        status: doc.data().status,
+        parent_id: doc.data().parent_id,
         created_at: doc.data().created_at || Timestamp.now(),
         updated_at: doc.data().updated_at || Timestamp.now()
       })) as Category[];
@@ -100,11 +112,16 @@ class CategoryService {
       if (!docSnap.exists()) {
         throw new Error('Category not found');
       }
+      const data = docSnap.data();
       return {
         id: docSnap.id,
-        ...docSnap.data(),
-        created_at: docSnap.data().created_at || Timestamp.now(),
-        updated_at: docSnap.data().updated_at || Timestamp.now()
+        name: data.name,
+        description: data.description,
+        image: data.image,
+        status: data.status,
+        parent_id: data.parent_id,
+        created_at: data.created_at || Timestamp.now(),
+        updated_at: data.updated_at || Timestamp.now()
       } as Category;
     } catch (error) {
       console.error('Error getting category:', error);
