@@ -3,19 +3,39 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from '@firebase/storage';
 
+// Validate required environment variables
+const requiredEnvVars = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID'
+];
+
+requiredEnvVars.forEach(varName => {
+  if (!import.meta.env[varName]) {
+    throw new Error(`Missing required environment variable: ${varName}`);
+  }
+});
+
 const firebaseConfig = {
-  apiKey: "AIzaSyDfFYRoVCZwNgadP2w58YvVPmtg4ND5umw",
-  authDomain: "ecompwa-c0b6e.firebaseapp.com",
-  projectId: "ecompwa-c0b6e",
-  storageBucket: "ecompwa-c0b6e.appspot.com",
-  messagingSenderId: "1012444902177",
-  appId: "1:1012444902177:web:c5c0d7c6c2e8c8c5c0d7c6"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
-
-export default app; 
+// Initialize Firebase with error handling
+try {
+  const app = initializeApp(firebaseConfig);
+  export const auth = getAuth(app);
+  export const db = getFirestore(app);
+  export const storage = getStorage(app);
+  export default app;
+} catch (error) {
+  console.error('Error initializing Firebase:', error);
+  throw new Error('Failed to initialize Firebase. Please check your configuration.');
+} 
