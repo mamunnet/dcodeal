@@ -1,31 +1,47 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
+import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [
     react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
-      manifest: {
-        name: 'Delivery PWA App',
-        short_name: 'DeliveryApp',
-        description: 'Your one-stop delivery solution',
-        theme_color: '#ffffff',
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
-        ]
-      }
-    })
-  ]
+    {
+      name: 'imagekit-auth',
+      configureServer(server) {
+        server.middlewares.use('/api/imagekit/auth', (_req, res) => {
+          // Import dynamically to avoid TypeScript issues
+          import('./src/server/imagekit').then(({ getAuthenticationParameters }) => {
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(getAuthenticationParameters()));
+          }).catch(error => {
+            console.error('Error loading imagekit auth:', error);
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: 'Internal server error' }));
+          });
+        });
+      },
+    },
+  ],
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
+      crypto: 'crypto-browserify',
+    },
+  },
+  define: {
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
+    'global': {},
+  },
+  optimizeDeps: {
+    include: ['bcryptjs'],
+    esbuildOptions: {
+      target: 'esnext',
+    },
+  },
+  build: {
+    target: 'esnext',
+    commonjsOptions: {
+      include: [/bcryptjs/],
+    },
+  },
 })

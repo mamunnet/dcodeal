@@ -1,0 +1,62 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper functions
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'mariawebtech.contact@gmail.com';
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isValidImage() {
+      return request.resource.contentType.matches('image/.*') 
+        && request.resource.size <= 5 * 1024 * 1024; // 5MB
+    }
+
+    function isValidFile() {
+      return request.resource.size <= 10 * 1024 * 1024; // 10MB
+    }
+
+    // Categories images
+    match /categories/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidImage();
+    }
+
+    // Products images
+    match /products/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidImage();
+    }
+
+    // Order attachments (invoices, etc.)
+    match /orders/{orderId}/{fileName} {
+      allow read: if isAdmin() || 
+        (isAuthenticated() && resource.metadata.userId == request.auth.uid);
+      allow write: if isAdmin() && isValidFile();
+    }
+
+    // User profile pictures
+    match /users/{userId}/profile/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() || 
+        (isAuthenticated() && userId == request.auth.uid && isValidImage());
+    }
+
+    // Customer uploads
+    match /customers/{customerId}/{fileName} {
+      allow read: if isAdmin() || 
+        (isAuthenticated() && customerId == request.auth.uid);
+      allow write: if isAdmin() || 
+        (isAuthenticated() && customerId == request.auth.uid && isValidFile());
+    }
+
+    // Deny access to all other files by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+} 

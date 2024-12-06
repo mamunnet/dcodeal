@@ -1,51 +1,32 @@
-import { MantineProvider } from '@mantine/core'
-import { Home, Search, Grid2x2, User } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useState } from 'react'
-import { NavItem } from './components/NavItem'
-import { AccountPage } from './components/account/AccountPage'
-import { CategoriesPage } from './components/CategoriesPage'
-import { HomePage } from './components/HomePage'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, ProtectedRoute } from './admin/context/AuthContext';
+import { adminRoutes } from './admin/routes';
+import Login from './admin/pages/Login';
+import { HomePage } from './components/HomePage';
 
-function App() {
-  const [currentPage, setCurrentPage] = useState<'home' | 'categories' | 'account'>('home')
-
+export default function App() {
   return (
-    <MantineProvider>
-      <div className="max-w-md mx-auto bg-gray-50 min-h-screen flex flex-col">
-        <div className="flex-1 overflow-y-auto pb-20">
-          <AnimatePresence mode="wait">
-            {currentPage === 'home' && <HomePage key="home" />}
-            {currentPage === 'categories' && <CategoriesPage key="categories" onBack={() => setCurrentPage('home')} />}
-            {currentPage === 'account' && <AccountPage key="account" onBack={() => setCurrentPage('home')} />}
-          </AnimatePresence>
-        </div>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/ecomadmin" element={<Login />} />
 
-        {/* Bottom Navigation */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 flex justify-between items-center max-w-md mx-auto shadow-lg">
-          <NavItem 
-            icon={<Home size={24} />} 
-            label="Home" 
-            active={currentPage === 'home'}
-            onClick={() => setCurrentPage('home')}
+          {/* Protected admin routes */}
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedRoute>
+                {adminRoutes[0].element}
+              </ProtectedRoute>
+            }
           />
-          <NavItem icon={<Search size={24} />} label="Search" />
-          <NavItem 
-            icon={<Grid2x2 size={24} />} 
-            label="Categories" 
-            active={currentPage === 'categories'}
-            onClick={() => setCurrentPage('categories')}
-          />
-          <NavItem 
-            icon={<User size={24} />} 
-            label="Account" 
-            active={currentPage === 'account'}
-            onClick={() => setCurrentPage('account')}
-          />
-        </nav>
-      </div>
-    </MantineProvider>
-  )
+
+          {/* Catch all route */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
 }
-
-export default App
