@@ -3,13 +3,18 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged as firebaseOnAuthStateChanged,
-  User
-} from 'firebase/auth';
+  User,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  PhoneAuthProvider,
+  signInWithCredential
+} from '@firebase/auth';
 
 export class Auth {
   private static instance: Auth;
   private currentUser: User | null = null;
   private readonly ADMIN_EMAIL = 'mariawebtech.contact@gmail.com';
+  private recaptchaVerifier: RecaptchaVerifier | null = null;
 
   private constructor() {
     firebaseOnAuthStateChanged(auth, (user) => {
@@ -28,13 +33,50 @@ export class Auth {
     return firebaseOnAuthStateChanged(auth, callback);
   }
 
+  async loginWithPhone(phoneNumber: string): Promise<{ verificationId: string }> {
+    try {
+      if (!this.recaptchaVerifier) {
+        this.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          size: 'invisible'
+        });
+      }
+
+      const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+91${phoneNumber}`;
+      const confirmationResult = await signInWithPhoneNumber(
+        auth,
+        formattedPhone,
+        this.recaptchaVerifier
+      );
+      return { verificationId: confirmationResult.verificationId };
+    } catch (error) {
+      console.error('Phone verification error:', error);
+      if (this.recaptchaVerifier) {
+        this.recaptchaVerifier.clear();
+        this.recaptchaVerifier = null;
+      }
+      throw error;
+    }
+  }
+
+  async verifyOTP(verificationId: string, otp: string): Promise<boolean> {
+    try {
+      if (!this.recaptchaVerifier) {
+        throw new Error('Please request OTP first');
+      }
+      const credential = PhoneAuthProvider.credential(verificationId, otp);
+      await signInWithCredential(auth, credential);
+      return true;
+    } catch (error) {
+      console.error('OTP verification error:', error);
+      throw error;
+    }
+  }
+
   async login(email: string, password: string): Promise<boolean> {
     try {
-      // Try to sign in
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Verify if it's the admin email
       if (email !== this.ADMIN_EMAIL) {
         console.error('User is not authorized as admin');
         await this.logout();
@@ -46,7 +88,6 @@ export class Auth {
     } catch (error: unknown) {
       console.error('Login error:', error);
       
-      // Handle Firebase Auth errors
       if (error && typeof error === 'object' && 'code' in error) {
         const errorCode = (error as { code: string }).code;
         switch (errorCode) {
@@ -75,6 +116,10 @@ export class Auth {
     try {
       await firebaseSignOut(auth);
       this.currentUser = null;
+      if (this.recaptchaVerifier) {
+        this.recaptchaVerifier.clear();
+        this.recaptchaVerifier = null;
+      }
     } catch (error) {
       console.error('Logout error:', error);
       throw error;
@@ -83,6 +128,10 @@ export class Auth {
 
   getCurrentUser(): User | null {
     return this.currentUser;
+  }
+
+  isCustomer(user: User | null): boolean {
+    return !!user && user.phoneNumber !== null;
   }
 
   isAdmin(user: User | null): boolean {

@@ -1,96 +1,99 @@
-import { useState } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { 
-  LayoutDashboard, 
-  Package, 
-  LayoutGrid, 
-  ShoppingCart, 
-  Users, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Package,
+  LayoutGrid,
+  ShoppingCart,
+  Users,
+  Settings as SettingsIcon,
   LogOut,
-  Menu,
-  X
 } from 'lucide-react';
-
-const navigation = [
-  { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { name: 'Products', href: '/admin/products', icon: Package },
-  { name: 'Categories', href: '/admin/categories', icon: LayoutGrid },
-  { name: 'Orders', href: '/admin/orders', icon: ShoppingCart },
-  { name: 'Customers', href: '/admin/customers', icon: Users },
-  { name: 'Settings', href: '/admin/settings', icon: Settings },
-];
+import { useAuth } from '../context/AuthContext';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
 }
 
-export default function AdminLayout({ children }: AdminLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const location = useLocation();
   const { logout } = useAuth();
 
+  const menuItems = [
+    { path: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/admin/products', icon: Package, label: 'Products' },
+    { path: '/admin/categories', icon: LayoutGrid, label: 'Categories' },
+    { path: '/admin/orders', icon: ShoppingCart, label: 'Orders' },
+    { path: '/admin/customers', icon: Users, label: 'Customers' },
+    { path: '/admin/settings', icon: SettingsIcon, label: 'Settings' },
+  ];
+
+  const isActiveRoute = (path: string) => {
+    if (path === '/admin') {
+      return location.pathname === '/admin';
+    }
+    return location.pathname === path;
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Mobile sidebar */}
-      <div className="lg:hidden">
-        <button
-          className="fixed top-4 left-4 p-2 rounded-md bg-white shadow-md"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-        >
-          {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+    <div className="flex h-screen bg-gray-100">
+      {/* Sidebar */}
+      <div className="w-64 bg-white shadow-lg">
+        <div className="flex flex-col h-full">
+          <div className="p-4">
+            <h1 className="text-xl font-bold text-gray-800">Admin Panel</h1>
+          </div>
+          <nav className="flex-1 overflow-y-auto">
+            <ul className="p-2 space-y-1">
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = isActiveRoute(item.path);
+                return (
+                  <li key={item.path}>
+                    <Link
+                      to={item.path}
+                      className={`flex items-center px-4 py-2 text-sm rounded-lg ${
+                        isActive
+                          ? 'bg-blue-50 text-blue-600'
+                          : 'text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 mr-3" />
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+          <div className="p-4 border-t">
+            <button
+              onClick={handleSignOut}
+              className="flex items-center w-full px-4 py-2 text-sm text-red-600 rounded-lg hover:bg-red-50"
+            >
+              <LogOut className="w-5 h-5 mr-3" />
+              Sign Out
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Sidebar */}
-      <aside className={`
-        fixed top-0 left-0 z-40 w-64 h-screen transition-transform 
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
-        lg:translate-x-0 bg-white border-r border-gray-200
-      `}>
-        <div className="h-full px-3 py-4 overflow-y-auto">
-          <div className="mb-10 px-2">
-            <h1 className="text-2xl font-bold">Admin Panel</h1>
-          </div>
-          <ul className="space-y-2 font-medium">
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href;
-              const Icon = item.icon;
-              return (
-                <li key={item.name}>
-                  <Link
-                    to={item.href}
-                    className={`
-                      flex items-center p-2 rounded-lg hover:bg-gray-100
-                      ${isActive ? 'bg-gray-100 text-blue-600' : 'text-gray-900'}
-                    `}
-                  >
-                    <Icon className="w-6 h-6" />
-                    <span className="ml-3">{item.name}</span>
-                  </Link>
-                </li>
-              );
-            })}
-            <li>
-              <button
-                className="w-full flex items-center p-2 text-gray-900 rounded-lg hover:bg-gray-100"
-                onClick={logout}
-              >
-                <LogOut className="w-6 h-6" />
-                <span className="ml-3">Logout</span>
-              </button>
-            </li>
-          </ul>
-        </div>
-      </aside>
-
-      {/* Main content */}
-      <div className="lg:ml-64 p-4">
-        <div className="p-4 bg-white rounded-lg shadow-md min-h-[calc(100vh-2rem)]">
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto">
+        <div className="container mx-auto p-6">
           {children}
         </div>
       </div>
     </div>
   );
-} 
+};
+
+export default AdminLayout; 

@@ -3,13 +3,6 @@
 /.pnp
 .pnp.js
 
-# Testing
-/coverage
-
-# Production
-/build
-/dist
-
 # Environment files
 .env
 .env.local
@@ -17,23 +10,29 @@
 .env.test.local
 .env.production.local
 
-# Firebase
-.firebase/
-firebase-debug.log
-firestore-debug.log
-ui-debug.log
+# Build files
+/dist
+/build
+/.vite
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Logs
+# Debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# OS
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
 .DS_Store
-Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Firebase
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*

@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Save, Store, Truck, CreditCard, Mail } from 'lucide-react';
-import { settingsService } from '../../lib/services/settings';
-import type { StoreSettings } from '../../types/settings';
+import { Save, Store, Truck, CreditCard, Mail, MapPin } from 'lucide-react';
+import { SettingsService } from '../../lib/services/settings';
+import type { StoreSettings, DeliveryZone } from '../../types/settings';
+import { DeliveryZonesForm } from '../components/forms/DeliveryZonesForm';
 
 export default function Settings() {
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  const settingsService = SettingsService.getInstance();
 
   useEffect(() => {
     loadSettings();
@@ -15,12 +17,13 @@ export default function Settings() {
 
   const loadSettings = async () => {
     try {
-      setLoading(true);
       const data = await settingsService.getSettings();
       setSettings(data);
     } catch (error) {
-      console.error('Error loading settings:', error);
-      setMessage({ type: 'error', text: 'Failed to load settings' });
+      setMessage({
+        type: 'error',
+        text: 'Failed to load settings',
+      });
     } finally {
       setLoading(false);
     }
@@ -31,30 +34,34 @@ export default function Settings() {
     if (!settings) return;
 
     try {
-      setSaving(true);
+      setMessage({ type: 'info', text: 'Saving changes...' });
       await settingsService.updateSettings(settings);
-      setMessage({ type: 'success', text: 'Settings saved successfully' });
+      setMessage({
+        type: 'success',
+        text: 'Settings updated successfully',
+      });
+
+      // Reload settings to ensure we have the latest data
+      const updatedSettings = await settingsService.getSettings();
+      setSettings(updatedSettings);
     } catch (error) {
-      console.error('Error saving settings:', error);
-      setMessage({ type: 'error', text: 'Failed to save settings' });
-    } finally {
-      setSaving(false);
+      console.error('Failed to update settings:', error);
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to update settings',
+      });
     }
   };
 
-  const handleChange = (
-    section: keyof StoreSettings,
-    field: string,
-    value: string | number | boolean
-  ) => {
+  const handleChange = (section: keyof StoreSettings, field: string, value: string | number | boolean | DeliveryZone[]) => {
     if (!settings) return;
 
     setSettings({
       ...settings,
       [section]: {
         ...settings[section],
-        [field]: value
-      }
+        [field]: value,
+      },
     });
   };
 
@@ -86,7 +93,11 @@ export default function Settings() {
       {message && (
         <div
           className={`mb-4 p-4 rounded-md ${
-            message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+            message.type === 'success' 
+              ? 'bg-green-50 text-green-800' 
+              : message.type === 'error'
+              ? 'bg-red-50 text-red-800'
+              : 'bg-blue-50 text-blue-800'
           }`}
         >
           {message.text}
@@ -205,6 +216,18 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Delivery Zones */}
+        <div className="bg-white shadow-sm rounded-lg p-6">
+          <div className="flex items-center mb-4">
+            <MapPin className="h-5 w-5 text-gray-400 mr-2" />
+            <h3 className="text-lg font-medium text-gray-900">Delivery Zones</h3>
+          </div>
+          <DeliveryZonesForm
+            zones={settings.shipping.delivery_zones}
+            onChange={(zones) => handleChange('shipping', 'delivery_zones', zones)}
+          />
+        </div>
+
         {/* Payment Settings */}
         <div className="bg-white shadow-sm rounded-lg p-6">
           <div className="flex items-center mb-4">
@@ -217,27 +240,22 @@ export default function Settings() {
                 Payment Gateway
               </label>
               <div className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 px-3 py-2 text-gray-500 sm:text-sm">
-                Razorpay (Test Mode)
+                Razorpay
               </div>
-              <p className="mt-1 text-sm text-gray-500">
-                Currently using Razorpay in test mode. Contact support to enable live mode.
-              </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Test Mode
-              </label>
-              <div className="mt-2">
-                <div className="flex items-center">
+              <div className="flex items-start">
+                <div className="flex items-center h-5">
                   <input
                     type="checkbox"
                     checked={settings.payment.test_mode}
                     onChange={(e) => handleChange('payment', 'test_mode', e.target.checked)}
                     className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
                   />
-                  <label className="ml-2 block text-sm text-gray-900">
-                    Enable test mode for payments
-                  </label>
+                </div>
+                <div className="ml-3 text-sm">
+                  <label className="font-medium text-gray-700">Test Mode</label>
+                  <p className="text-gray-500">Use test credentials for payments</p>
                 </div>
               </div>
             </div>
@@ -312,13 +330,10 @@ export default function Settings() {
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={saving}
-            className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-              saving ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <Save className="h-4 w-4 mr-2" />
-            {saving ? 'Saving...' : 'Save Changes'}
+            Save Changes
           </button>
         </div>
       </form>

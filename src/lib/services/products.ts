@@ -1,88 +1,129 @@
-import { 
-  collection, 
-  doc, 
-  getDoc,
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc,
-  query, 
-  where, 
-  orderBy, 
-  Timestamp,
-  DocumentData,
-  QueryDocumentSnapshot
-} from 'firebase/firestore';
 import { db } from '../firebase';
-import type { Product, Category } from '../../types/product';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  orderBy,
+  QueryDocumentSnapshot,
+  DocumentData,
+} from 'firebase/firestore';
+import type { Product } from '../../types/product';
+
+const PRODUCTS_COLLECTION = 'products';
 
 class ProductService {
-  private collection = 'products';
-
-  async getProducts(): Promise<Product[]> {
+  async getProducts(lastDoc?: QueryDocumentSnapshot<DocumentData>) {
     try {
-      const productsRef = collection(db, this.collection);
-      const q = query(productsRef, orderBy('created_at', 'desc'));
+      let q = query(
+        collection(db, PRODUCTS_COLLECTION),
+        orderBy('created_at', 'desc')
+      );
+
+      if (lastDoc) {
+        q = query(q, where('created_at', '<', lastDoc.data().created_at));
+      }
+
       const querySnapshot = await getDocs(q);
-      
       return querySnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       })) as Product[];
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error('Error getting products:', error);
       throw error;
     }
   }
 
-  async getProduct(id: string): Promise<Product | null> {
+  async getProduct(id: string) {
     try {
-      const docRef = doc(db, this.collection, id);
+      const docRef = doc(db, PRODUCTS_COLLECTION, id);
       const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
-        return {
-          id: docSnap.id,
-          ...docSnap.data()
-        } as Product;
+      if (!docSnap.exists()) {
+        throw new Error('Product not found');
       }
-      return null;
+      return { id: docSnap.id, ...docSnap.data() } as Product;
     } catch (error) {
-      console.error('Error fetching product:', error);
+      console.error('Error getting product:', error);
       throw error;
     }
   }
 
-  async getProductsByCategory(categoryId: string): Promise<Product[]> {
+  async getProductsByCategory(categoryId: string) {
     try {
-      const productsRef = collection(db, this.collection);
       const q = query(
-        productsRef,
+        collection(db, PRODUCTS_COLLECTION),
         where('category_id', '==', categoryId),
+        where('status', '==', 'active'),
         orderBy('created_at', 'desc')
       );
       const querySnapshot = await getDocs(q);
-      
       return querySnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       })) as Product[];
     } catch (error) {
-      console.error('Error fetching products by category:', error);
+      console.error('Error getting products by category:', error);
       throw error;
     }
   }
 
-  async createProduct(product: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<string> {
+  async getFeaturedProducts() {
     try {
-      const now = Timestamp.now();
-      const productData = {
-        ...product,
-        created_at: now,
-        updated_at: now
-      };
-      
-      const docRef = await addDoc(collection(db, this.collection), productData);
+      const q = query(
+        collection(db, PRODUCTS_COLLECTION),
+        where('featured', '==', true),
+        where('status', '==', 'active'),
+        orderBy('created_at', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Product[];
+    } catch (error) {
+      console.error('Error getting featured products:', error);
+      throw error;
+    }
+  }
+
+  async searchProducts(searchTerm: string) {
+    try {
+      const q = query(
+        collection(db, PRODUCTS_COLLECTION),
+        where('status', '==', 'active'),
+        orderBy('name')
+      );
+      const querySnapshot = await getDocs(q);
+      const products = querySnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Product[];
+
+      const searchTermLower = searchTerm.toLowerCase();
+      return products.filter(
+        (product) =>
+          product.name.toLowerCase().includes(searchTermLower) ||
+          product.description.toLowerCase().includes(searchTermLower)
+      );
+    } catch (error) {
+      console.error('Error searching products:', error);
+      throw error;
+    }
+  }
+
+  async createProduct(data: Omit<Product, 'id' | 'created_at' | 'updated_at'>) {
+    try {
+      const docRef = await addDoc(collection(db, PRODUCTS_COLLECTION), {
+        ...data,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
       return docRef.id;
     } catch (error) {
       console.error('Error creating product:', error);
@@ -90,12 +131,15 @@ class ProductService {
     }
   }
 
-  async updateProduct(id: string, product: Partial<Omit<Product, 'id' | 'created_at'>>): Promise<void> {
+  async updateProduct(
+    id: string,
+    data: Partial<Omit<Product, 'id' | 'created_at' | 'updated_at'>>
+  ) {
     try {
-      const docRef = doc(db, this.collection, id);
+      const docRef = doc(db, PRODUCTS_COLLECTION, id);
       await updateDoc(docRef, {
-        ...product,
-        updated_at: Timestamp.now()
+        ...data,
+        updated_at: new Date(),
       });
     } catch (error) {
       console.error('Error updating product:', error);
@@ -103,9 +147,9 @@ class ProductService {
     }
   }
 
-  async deleteProduct(id: string): Promise<void> {
+  async deleteProduct(id: string) {
     try {
-      const docRef = doc(db, this.collection, id);
+      const docRef = doc(db, PRODUCTS_COLLECTION, id);
       await deleteDoc(docRef);
     } catch (error) {
       console.error('Error deleting product:', error);

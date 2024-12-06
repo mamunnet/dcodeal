@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Plus, Check, Trash } from 'lucide-react'
-import { Card } from '../types'
+import { ArrowLeft, Plus, Check, Trash, CreditCard } from 'lucide-react'
+
+interface Card {
+  id: number
+  type: string
+  number: string
+  expiry: string
+  default: boolean
+}
 
 interface PaymentSectionProps {
   cards: Card[]
@@ -13,7 +20,53 @@ interface PaymentSectionProps {
 
 export function PaymentSection({ cards, onBack, onAddCard, onDeleteCard, onSetDefault }: PaymentSectionProps) {
   const [isAdding, setIsAdding] = useState(false)
-  const [newCard, setNewCard] = useState({ type: '', number: '', expiry: '', default: false })
+  const [newCard, setNewCard] = useState({
+    type: 'visa',
+    number: '',
+    expiry: '',
+    default: false,
+  })
+
+  const handleSubmit = () => {
+    if (!newCard.number || !newCard.expiry) {
+      alert('Please fill in all fields')
+      return
+    }
+
+    onAddCard(newCard)
+    setIsAdding(false)
+    setNewCard({
+      type: 'visa',
+      number: '',
+      expiry: '',
+      default: false,
+    })
+  }
+
+  const formatCardNumber = (value: string) => {
+    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '')
+    const matches = v.match(/\d{4,16}/g)
+    const match = (matches && matches[0]) || ''
+    const parts = []
+
+    for (let i = 0, len = match.length; i < len; i += 4) {
+      parts.push(match.substring(i, i + 4))
+    }
+
+    if (parts.length) {
+      return parts.join(' ')
+    } else {
+      return value
+    }
+  }
+
+  const formatExpiry = (value: string) => {
+    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '')
+    if (v.length >= 2) {
+      return `${v.substring(0, 2)}/${v.substring(2, 4)}`
+    }
+    return v
+  }
 
   return (
     <motion.div
@@ -33,7 +86,7 @@ export function PaymentSection({ cards, onBack, onAddCard, onDeleteCard, onSetDe
           onClick={() => setIsAdding(true)}
           className="p-2 rounded-full hover:bg-gray-100"
         >
-          <Plus size={24} className="text-green-600" />
+          <Plus size={24} className="text-blue-600" />
         </button>
       </header>
 
@@ -45,43 +98,44 @@ export function PaymentSection({ cards, onBack, onAddCard, onDeleteCard, onSetDe
               <select
                 value={newCard.type}
                 onChange={(e) => setNewCard({ ...newCard, type: e.target.value })}
-                className="mt-1 w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                className="mt-1 w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">Select card type</option>
-                <option value="Visa">Visa</option>
-                <option value="Mastercard">Mastercard</option>
-                <option value="American Express">American Express</option>
+                <option value="visa">Visa</option>
+                <option value="mastercard">Mastercard</option>
+                <option value="amex">American Express</option>
               </select>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700">Card Number</label>
               <input
                 type="text"
-                placeholder="**** **** **** ****"
+                maxLength={19}
                 value={newCard.number}
-                onChange={(e) => setNewCard({ ...newCard, number: e.target.value })}
-                className="mt-1 w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                onChange={(e) => setNewCard({ ...newCard, number: formatCardNumber(e.target.value) })}
+                className="mt-1 w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="**** **** **** ****"
               />
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700">Expiry Date</label>
               <input
                 type="text"
-                placeholder="MM/YY"
+                maxLength={5}
                 value={newCard.expiry}
-                onChange={(e) => setNewCard({ ...newCard, expiry: e.target.value })}
-                className="mt-1 w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                onChange={(e) => setNewCard({ ...newCard, expiry: formatExpiry(e.target.value) })}
+                className="mt-1 w-full p-3 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="MM/YY"
               />
             </div>
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
-                id="defaultCard"
+                id="default"
                 checked={newCard.default}
                 onChange={(e) => setNewCard({ ...newCard, default: e.target.checked })}
-                className="rounded text-green-600 focus:ring-green-500"
+                className="rounded text-blue-600 focus:ring-blue-500"
               />
-              <label htmlFor="defaultCard" className="text-sm text-gray-700">Set as default card</label>
+              <label htmlFor="default" className="text-sm text-gray-700">Set as default payment method</label>
             </div>
             <div className="flex gap-2">
               <button
@@ -91,12 +145,8 @@ export function PaymentSection({ cards, onBack, onAddCard, onDeleteCard, onSetDe
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  onAddCard(newCard)
-                  setIsAdding(false)
-                  setNewCard({ type: '', number: '', expiry: '', default: false })
-                }}
-                className="flex-1 bg-green-600 text-white p-3 rounded-lg hover:bg-green-700"
+                onClick={handleSubmit}
+                className="flex-1 bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700"
               >
                 Add Card
               </button>
@@ -110,9 +160,14 @@ export function PaymentSection({ cards, onBack, onAddCard, onDeleteCard, onSetDe
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
+                  <CreditCard className={`h-5 w-5 ${
+                    card.type.toLowerCase() === 'visa' ? 'text-blue-600' :
+                    card.type.toLowerCase() === 'mastercard' ? 'text-red-600' :
+                    'text-gray-600'
+                  }`} />
                   <span className="font-medium">{card.type}</span>
                   {card.default && (
-                    <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full">
+                    <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full">
                       Default
                     </span>
                   )}
@@ -123,7 +178,7 @@ export function PaymentSection({ cards, onBack, onAddCard, onDeleteCard, onSetDe
                       onClick={() => onSetDefault(card.id)}
                       className="p-2 rounded-full hover:bg-gray-100"
                     >
-                      <Check size={20} className="text-green-600" />
+                      <Check size={20} className="text-blue-600" />
                     </button>
                   )}
                   <button
@@ -134,8 +189,8 @@ export function PaymentSection({ cards, onBack, onAddCard, onDeleteCard, onSetDe
                   </button>
                 </div>
               </div>
-              <p className="text-gray-600">{card.number}</p>
-              <p className="text-sm text-gray-500">Expires: {card.expiry}</p>
+              <p className="text-sm text-gray-600">{card.number}</p>
+              <p className="text-sm text-gray-600">Expires {card.expiry}</p>
             </div>
           ))
         )}

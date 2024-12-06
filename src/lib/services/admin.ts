@@ -1,117 +1,79 @@
-import { db } from '../firebase';
 import { 
   collection, 
   getDocs, 
   query, 
-  orderBy,
+  where, 
+  orderBy, 
+  Timestamp,
+  QueryDocumentSnapshot,
   DocumentData,
-  QueryDocumentSnapshot
+  limit
 } from 'firebase/firestore';
+import { db } from '../firebase';
+import type { Order } from '../../types/order';
+import type { Product } from '../../types/product';
 
-interface AdminStats {
-  totalProducts: number;
+interface DashboardStats {
   totalOrders: number;
-  totalCustomers: number;
+  totalProducts: number;
   totalRevenue: number;
+  recentOrders: Order[];
 }
 
 class AdminService {
-  private static instance: AdminService;
-
-  private constructor() {}
-
-  public static getInstance(): AdminService {
-    if (!AdminService.instance) {
-      AdminService.instance = new AdminService();
-    }
-    return AdminService.instance;
-  }
-
-  async getDashboardStats(): Promise<AdminStats> {
+  async getDashboardStats(): Promise<DashboardStats> {
     try {
-      // Get total products
-      const productsSnapshot = await getDocs(collection(db, 'products'));
-      const totalProducts = productsSnapshot.size;
+      // Get orders from the last 30 days
+      const thirtyDaysAgo = Timestamp.fromDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+      
+      // Get orders
+      const ordersQuery = query(
+        collection(db, 'orders'),
+        where('created_at', '>=', thirtyDaysAgo),
+        orderBy('created_at', 'desc')
+      );
+      const ordersSnapshot = await getDocs(ordersQuery);
+      const orders = ordersSnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Order[];
 
-      // Get total orders
-      const ordersSnapshot = await getDocs(collection(db, 'orders'));
-      const totalOrders = ordersSnapshot.size;
+      // Get products
+      const productsQuery = query(collection(db, 'products'));
+      const productsSnapshot = await getDocs(productsQuery);
+      const products = productsSnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Product[];
 
-      // Calculate total revenue from orders
-      let totalRevenue = 0;
-      ordersSnapshot.forEach((doc: QueryDocumentSnapshot<DocumentData>) => {
-        const orderData = doc.data();
-        totalRevenue += orderData.total || 0;
-      });
+      // Calculate stats
+      const totalOrders = orders.length;
+      const totalProducts = products.length;
+      const totalRevenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
 
-      // Get total customers
-      const customersSnapshot = await getDocs(collection(db, 'users'));
-      const totalCustomers = customersSnapshot.size;
+      // Get recent orders
+      const recentOrdersQuery = query(
+        collection(db, 'orders'),
+        orderBy('created_at', 'desc'),
+        limit(5)
+      );
+      const recentOrdersSnapshot = await getDocs(recentOrdersQuery);
+      const recentOrders = recentOrdersSnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Order[];
 
       return {
-        totalProducts,
         totalOrders,
-        totalCustomers,
-        totalRevenue
+        totalProducts,
+        totalRevenue,
+        recentOrders
       };
     } catch (error) {
       console.error('Error getting dashboard stats:', error);
-      return {
-        totalProducts: 0,
-        totalOrders: 0,
-        totalCustomers: 0,
-        totalRevenue: 0
-      };
-    }
-  }
-
-  async getRecentOrders(limit: number = 5): Promise<DocumentData[]> {
-    try {
-      const ordersRef = collection(db, 'orders');
-      const q = query(ordersRef, orderBy('created_at', 'desc'));
-      const snapshot = await getDocs(q);
-      
-      return snapshot.docs.slice(0, limit).map((doc: QueryDocumentSnapshot<DocumentData>) => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-    } catch (error) {
-      console.error('Error getting recent orders:', error);
-      return [];
-    }
-  }
-
-  async getRecentCustomers(limit: number = 5): Promise<DocumentData[]> {
-    try {
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, orderBy('created_at', 'desc'));
-      const snapshot = await getDocs(q);
-      
-      return snapshot.docs.slice(0, limit).map((doc: QueryDocumentSnapshot<DocumentData>) => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-    } catch (error) {
-      console.error('Error getting recent customers:', error);
-      return [];
-    }
-  }
-
-  async getTopProducts(limit: number = 5): Promise<DocumentData[]> {
-    try {
-      const productsRef = collection(db, 'products');
-      const q = query(productsRef, orderBy('sales', 'desc'));
-      const snapshot = await getDocs(q);
-      
-      return snapshot.docs.slice(0, limit).map((doc: QueryDocumentSnapshot<DocumentData>) => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-    } catch (error) {
-      console.error('Error getting top products:', error);
-      return [];
+      throw error;
     }
   }
 }
 
-export const adminService = AdminService.getInstance(); 
+export const adminService = new AdminService(); 

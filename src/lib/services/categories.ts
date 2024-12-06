@@ -1,68 +1,126 @@
-import { 
-  collection, 
-  doc, 
-  getDoc,
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc,
-  query, 
-  orderBy, 
-  Timestamp,
-  DocumentData,
-  QueryDocumentSnapshot
-} from 'firebase/firestore';
 import { db } from '../firebase';
-import { storageService } from './storage';
-import type { Category } from '../../types/product';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  orderBy,
+  QueryDocumentSnapshot,
+  DocumentData,
+  Timestamp,
+  FieldValue
+} from '@firebase/firestore';
+
+export interface Category {
+  id: string;
+  name: string;
+  description?: string;
+  image?: string;
+  status: 'active' | 'inactive';
+  parent_id?: string | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+const CATEGORIES_COLLECTION = 'categories';
 
 class CategoryService {
-  private collection = 'categories';
-
   async getCategories(): Promise<Category[]> {
     try {
-      const categoriesRef = collection(db, this.collection);
-      const q = query(categoriesRef, orderBy('created_at', 'desc'));
+      const categoriesRef = collection(db, CATEGORIES_COLLECTION);
+      const q = query(categoriesRef);
       const querySnapshot = await getDocs(q);
       
       return querySnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        created_at: doc.data().created_at || Timestamp.now(),
+        updated_at: doc.data().updated_at || Timestamp.now()
       })) as Category[];
     } catch (error) {
-      console.error('Error fetching categories:', error);
+      console.error('Error getting categories:', error);
       throw error;
     }
   }
 
-  async getCategory(id: string): Promise<Category | null> {
+  async getActiveCategories(): Promise<Category[]> {
     try {
-      const docRef = doc(db, this.collection, id);
-      const docSnap = await getDoc(docRef);
+      const categoriesRef = collection(db, CATEGORIES_COLLECTION);
+      const q = query(
+        categoriesRef,
+        where('status', '==', 'active')
+      );
+      const querySnapshot = await getDocs(q);
       
-      if (docSnap.exists()) {
-        return {
-          id: docSnap.id,
-          ...docSnap.data()
-        } as Category;
-      }
-      return null;
+      return querySnapshot.docs
+        .map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+          id: doc.id,
+          ...doc.data(),
+          created_at: doc.data().created_at || Timestamp.now(),
+          updated_at: doc.data().updated_at || Timestamp.now()
+        }))
+        .filter((category: Category) => !category.parent_id) as Category[];
     } catch (error) {
-      console.error('Error fetching category:', error);
+      console.error('Error getting active categories:', error);
       throw error;
     }
   }
 
-  async createCategory(category: Omit<Category, 'id' | 'created_at' | 'updated_at'>): Promise<string> {
+  async getSubCategories(parentId: string): Promise<Category[]> {
+    try {
+      const categoriesRef = collection(db, CATEGORIES_COLLECTION);
+      const q = query(
+        categoriesRef,
+        where('parent_id', '==', parentId),
+        where('status', '==', 'active')
+      );
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
+        id: doc.id,
+        ...doc.data(),
+        created_at: doc.data().created_at || Timestamp.now(),
+        updated_at: doc.data().updated_at || Timestamp.now()
+      })) as Category[];
+    } catch (error) {
+      console.error('Error getting sub-categories:', error);
+      throw error;
+    }
+  }
+
+  async getCategory(id: string): Promise<Category> {
+    try {
+      const docRef = doc(db, CATEGORIES_COLLECTION, id);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) {
+        throw new Error('Category not found');
+      }
+      return {
+        id: docSnap.id,
+        ...docSnap.data(),
+        created_at: docSnap.data().created_at || Timestamp.now(),
+        updated_at: docSnap.data().updated_at || Timestamp.now()
+      } as Category;
+    } catch (error) {
+      console.error('Error getting category:', error);
+      throw error;
+    }
+  }
+
+  async createCategory(data: Omit<Category, 'id' | 'created_at' | 'updated_at'>): Promise<string> {
     try {
       const now = Timestamp.now();
-      const categoryData = {
-        ...category,
+      const docRef = await addDoc(collection(db, CATEGORIES_COLLECTION), {
+        ...data,
+        parent_id: data.parent_id || null,
         created_at: now,
         updated_at: now
-      };
-      
-      const docRef = await addDoc(collection(db, this.collection), categoryData);
+      });
       return docRef.id;
     } catch (error) {
       console.error('Error creating category:', error);
@@ -70,11 +128,15 @@ class CategoryService {
     }
   }
 
-  async updateCategory(id: string, category: Partial<Omit<Category, 'id' | 'created_at'>>): Promise<void> {
+  async updateCategory(
+    id: string,
+    data: Partial<Omit<Category, 'id' | 'created_at' | 'updated_at'>>
+  ): Promise<void> {
     try {
-      const docRef = doc(db, this.collection, id);
+      const docRef = doc(db, CATEGORIES_COLLECTION, id);
       await updateDoc(docRef, {
-        ...category,
+        ...data,
+        parent_id: data.parent_id || null,
         updated_at: Timestamp.now()
       });
     } catch (error) {
@@ -85,13 +147,13 @@ class CategoryService {
 
   async deleteCategory(id: string): Promise<void> {
     try {
-      // Get the category to delete its image
-      const category = await this.getCategory(id);
-      if (category?.image) {
-        await storageService.deleteFile(category.image);
+      // First, check if there are any sub-categories
+      const subCategories = await this.getSubCategories(id);
+      if (subCategories.length > 0) {
+        throw new Error('Cannot delete category with sub-categories. Delete sub-categories first.');
       }
 
-      const docRef = doc(db, this.collection, id);
+      const docRef = doc(db, CATEGORIES_COLLECTION, id);
       await deleteDoc(docRef);
     } catch (error) {
       console.error('Error deleting category:', error);

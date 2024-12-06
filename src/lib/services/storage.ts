@@ -1,70 +1,28 @@
+import { ref, uploadBytes, getDownloadURL, deleteObject } from '@firebase/storage';
 import { storage } from '../firebase';
-import {
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-  UploadMetadata
-} from '@firebase/storage';
-
-interface UploadResponse {
-  success: boolean;
-  url?: string;
-  error?: string;
-  metadata?: {
-    contentType: string;
-    size: number;
-    fullPath: string;
-  };
-}
 
 interface UploadOptions {
-  folder?: string;
-  fileName?: string;
-  contentType?: string;
+  folder: string;
+}
+
+interface UploadResponse {
+  url: string;
 }
 
 class StorageService {
-  private static instance: StorageService;
-
-  private constructor() {}
-
-  public static getInstance(): StorageService {
-    if (!StorageService.instance) {
-      StorageService.instance = new StorageService();
-    }
-    return StorageService.instance;
-  }
-
-  async uploadFile(file: File, options: UploadOptions = {}): Promise<UploadResponse> {
+  async uploadFile(file: File, options: UploadOptions): Promise<UploadResponse> {
     try {
-      const folder = options.folder || '';
-      const fileName = options.fileName || `${Date.now()}-${file.name}`;
-      const fullPath = folder ? `${folder}/${fileName}` : fileName;
+      const timestamp = Date.now();
+      const fileName = `${timestamp}-${file.name}`;
+      const storageRef = ref(storage, `${options.folder}/${fileName}`);
       
-      const fileRef = ref(storage, fullPath);
-      const metadata: UploadMetadata = {
-        contentType: options.contentType || file.type,
-      };
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
       
-      const result = await uploadBytes(fileRef, file, metadata);
-      const downloadUrl = await getDownloadURL(result.ref);
-
-      return {
-        success: true,
-        url: downloadUrl,
-        metadata: {
-          contentType: result.metadata.contentType || file.type,
-          size: result.metadata.size,
-          fullPath: result.metadata.fullPath,
-        },
-      };
+      return { url };
     } catch (error) {
-      console.error('Upload error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Upload failed',
-      };
+      console.error('Error uploading file:', error);
+      throw error;
     }
   }
 
@@ -74,15 +32,10 @@ class StorageService {
       await deleteObject(fileRef);
       return true;
     } catch (error) {
-      console.error('Delete error:', error);
+      console.error('Error deleting file:', error);
       return false;
     }
   }
-
-  getFileUrl(path: string): Promise<string> {
-    const fileRef = ref(storage, path);
-    return getDownloadURL(fileRef);
-  }
 }
 
-export const storageService = StorageService.getInstance(); 
+export const storageService = new StorageService(); 

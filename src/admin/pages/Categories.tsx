@@ -1,14 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash, ChevronDown, ChevronRight } from 'lucide-react';
 import { categoryService } from '../../lib/services/categories';
-import CategoryForm from '../components/forms/CategoryForm';
+import { CategoryForm } from '../components/forms/CategoryForm';
 import type { Category } from '../../types/product';
 
+interface CategoryWithChildren extends Category {
+  children?: CategoryWithChildren[];
+}
+
 export default function Categories() {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<CategoryWithChildren[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<Partial<Category> | undefined>();
+  const [loading, setLoading] = useState(true);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadCategories();
@@ -18,12 +23,42 @@ export default function Categories() {
     try {
       setLoading(true);
       const data = await categoryService.getCategories();
-      setCategories(data);
+      const organizedCategories = organizeCategories(data);
+      setCategories(organizedCategories);
     } catch (error) {
       console.error('Error loading categories:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const organizeCategories = (flatCategories: Category[]): CategoryWithChildren[] => {
+    const categoryMap = new Map<string, CategoryWithChildren>();
+    const rootCategories: CategoryWithChildren[] = [];
+
+    // First pass: Create all category objects with their basic info
+    flatCategories.forEach(cat => {
+      categoryMap.set(cat.id, { ...cat, children: [] });
+    });
+
+    // Second pass: Organize into hierarchy
+    flatCategories.forEach(cat => {
+      const category = categoryMap.get(cat.id)!;
+      if (cat.parent_id && categoryMap.has(cat.parent_id)) {
+        const parent = categoryMap.get(cat.parent_id)!;
+        parent.children = parent.children || [];
+        parent.children.push(category);
+      } else {
+        rootCategories.push(category);
+      }
+    });
+
+    return rootCategories;
+  };
+
+  const handleAdd = () => {
+    setSelectedCategory(undefined);
+    setShowForm(true);
   };
 
   const handleEdit = (category: Category) => {
@@ -32,144 +67,148 @@ export default function Categories() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this category?')) return;
-
-    try {
-      await categoryService.deleteCategory(id);
-      await loadCategories(); // Reload the list
-    } catch (error) {
-      console.error('Error deleting category:', error);
+    if (window.confirm('Are you sure you want to delete this category?')) {
+      try {
+        await categoryService.deleteCategory(id);
+        await loadCategories();
+      } catch (error) {
+        console.error('Error deleting category:', error);
+      }
     }
   };
 
-  const handleFormSubmit = async (formData: Partial<Category>) => {
+  const handleSubmit = async (data: Partial<Category>) => {
+    if (!data.name || !data.status) {
+      console.error('Required fields missing');
+      return;
+    }
+
+    const categoryData = {
+      name: data.name,
+      description: data.description || '',
+      image: data.image || '',
+      status: data.status,
+      parent_id: data.parent_id
+    };
+
     try {
-      if (selectedCategory) {
-        await categoryService.updateCategory(selectedCategory.id!, formData);
+      if (selectedCategory?.id) {
+        await categoryService.updateCategory(selectedCategory.id, categoryData);
       } else {
-        await categoryService.createCategory(formData as Omit<Category, 'id' | 'created_at' | 'updated_at'>);
+        await categoryService.createCategory(categoryData);
       }
       setShowForm(false);
-      setSelectedCategory(null);
-      await loadCategories(); // Reload the list
+      await loadCategories();
     } catch (error) {
       console.error('Error saving category:', error);
     }
   };
 
-  if (loading) {
+  const toggleExpand = (categoryId: string) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryId)) {
+        newSet.delete(categoryId);
+      } else {
+        newSet.add(categoryId);
+      }
+      return newSet;
+    });
+  };
+
+  const renderCategory = (category: CategoryWithChildren, level: number = 0) => {
+    const hasChildren = category.children && category.children.length > 0;
+    const isExpanded = expandedCategories.has(category.id);
+
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
+      <li key={category.id}>
+        <div 
+          className={`px-6 py-4 ${level > 0 ? 'ml-8 border-l border-gray-200' : ''}`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center flex-1">
+              {hasChildren && (
+                <button
+                  onClick={() => toggleExpand(category.id)}
+                  className="mr-2 text-gray-500 hover:text-gray-700"
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="h-5 w-5" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5" />
+                  )}
+                </button>
+              )}
+              {category.image && (
+                <img
+                  src={category.image}
+                  alt={category.name}
+                  className="h-12 w-12 object-cover rounded-md mr-4"
+                />
+              )}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">{category.name}</h3>
+                <p className="text-sm text-gray-500">{category.description}</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => handleEdit(category)}
+                className="text-blue-600 hover:text-blue-800"
+              >
+                <Pencil className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => handleDelete(category.id)}
+                className="text-red-600 hover:text-red-800"
+              >
+                <Trash className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+        {hasChildren && isExpanded && (
+          <ul className="divide-y divide-gray-200">
+            {category.children.map(child => renderCategory(child, level + 1))}
+          </ul>
+        )}
+      </li>
     );
+  };
+
+  if (loading) {
+    return <div>Loading...</div>;
   }
 
   return (
-    <div>
+    <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Categories</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Manage your product categories
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold text-gray-900">Categories</h1>
         <button
-          onClick={() => {
-            setSelectedCategory(null);
-            setShowForm(true);
-          }}
-          className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          onClick={handleAdd}
+          className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
         >
-          <Plus className="h-4 w-4 mr-2" />
+          <Plus className="h-5 w-5 mr-2" />
           Add Category
         </button>
       </div>
 
-      {/* Category List */}
-      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Category
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Description
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {categories.map((category) => (
-              <tr key={category.id}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    {category.image && (
-                      <div className="flex-shrink-0 h-10 w-10">
-                        <img
-                          className="h-10 w-10 rounded-lg object-cover"
-                          src={category.image}
-                          alt={category.name}
-                        />
-                      </div>
-                    )}
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        {category.name}
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm text-gray-900 line-clamp-2">
-                    {category.description}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    category.status === 'active'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {category.status.charAt(0).toUpperCase() + category.status.slice(1)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button
-                    onClick={() => handleEdit(category)}
-                    className="text-blue-600 hover:text-blue-900 mr-4"
-                  >
-                    <Pencil className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(category.id!)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="bg-white shadow overflow-hidden sm:rounded-md">
+        <ul className="divide-y divide-gray-200">
+          {categories.map(category => renderCategory(category))}
+        </ul>
       </div>
 
-      {/* Category Form Modal */}
       {showForm && (
-        <CategoryForm
-          category={selectedCategory}
-          onSubmit={handleFormSubmit}
-          onCancel={() => {
-            setShowForm(false);
-            setSelectedCategory(null);
-          }}
-        />
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <CategoryForm
+              category={selectedCategory}
+              onSubmit={handleSubmit}
+              onCancel={() => setShowForm(false)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
