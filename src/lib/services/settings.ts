@@ -30,8 +30,11 @@ class SettingsService {
       try {
         return await operation();
       } catch (error) {
+        console.error(`Attempt ${i + 1} failed:`, error);
         lastError = error;
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+        if (i < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+        }
       }
     }
     throw lastError;
@@ -40,7 +43,11 @@ class SettingsService {
   async loadSettings(): Promise<Settings> {
     try {
       const currentUser = this.auth.getCurrentUser();
-      if (!currentUser || !this.auth.isAdmin(currentUser)) {
+      if (!currentUser) {
+        throw new Error('Unauthorized: User not logged in');
+      }
+      
+      if (!this.auth.isAdmin(currentUser)) {
         throw new Error('Unauthorized: Only admin can access settings');
       }
 
@@ -71,7 +78,11 @@ class SettingsService {
   async saveSettings(settings: Settings): Promise<void> {
     try {
       const currentUser = this.auth.getCurrentUser();
-      if (!currentUser || !this.auth.isAdmin(currentUser)) {
+      if (!currentUser) {
+        throw new Error('Unauthorized: User not logged in');
+      }
+
+      if (!this.auth.isAdmin(currentUser)) {
         throw new Error('Unauthorized: Only admin can modify settings');
       }
 
@@ -90,7 +101,11 @@ class SettingsService {
   async updateDeliveryZones(zones: DeliveryZone[]): Promise<void> {
     try {
       const currentUser = this.auth.getCurrentUser();
-      if (!currentUser || !this.auth.isAdmin(currentUser)) {
+      if (!currentUser) {
+        throw new Error('Unauthorized: User not logged in');
+      }
+
+      if (!this.auth.isAdmin(currentUser)) {
         throw new Error('Unauthorized: Only admin can modify delivery zones');
       }
 

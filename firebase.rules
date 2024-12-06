@@ -36,6 +36,11 @@ service cloud.firestore {
       allow write: if false; // Only modifiable through Firebase Console
     }
 
+    // Admin settings
+    match /admin/settings {
+      allow read, write: if isAdmin();
+    }
+
     // Products collection
     match /products/{productId} {
       allow read: if true;
@@ -57,8 +62,10 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isAdmin() && isValidCategory();
       allow update: if isAdmin() && isValidCategory();
-      allow delete: if isAdmin() && !exists(/databases/$(database)/documents/products/$(productId)) 
-                                   where resource.data.categoryId == categoryId;
+      allow delete: if isAdmin() && !(
+        exists(/databases/$(database)/documents/products/{productId}) && 
+        get(/databases/$(database)/documents/products/{productId}).data.categoryId == categoryId
+      );
     }
 
     // Users collection
